@@ -1,0 +1,174 @@
+---
+title: "Bellabeat Casestudy"
+author: "Hillary Hou"
+date: "01/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+
+## Company Summary
+Bellabeat, a high-tech manufacturer of health-focused products for women. Bellabeat is a successful small company, but they have the potential to become a larger player in the global smart device market. Urška Sršen, cofounder and Chief Creative Officer of Bellabeat, believes that analyzing smart device fitness data could help unlock new growth opportunities for the company.
+
+I Used R programming to solve case study.
+
+**Prepare**
+```{r upload}
+activity <- read_csv("Fitabase Data /dailyActivity_merged.csv")
+calories <- read_csv("Fitabase Data /hourlyCalories_merged.csv")
+intensities <- read_csv ("Fitabase Data /hourlyIntensities_merged.csv")
+sleep_day <- read_csv("Fitabase Data /sleepDay_merged.csv")
+weight_log <- read_csv("Fitabase Data /weightLogInfo_merged.csv")
+```
+
+
+For each dataframe we'll look at the first six values and colnames.
+```{r clean}
+head(activity)
+colnames(activity)
+head(calories)
+colnames(calories)
+head(intensities)
+colnames(intensities)
+head(sleep_day)
+colnames(sleep_day)
+head(weight_log)
+colnames(weight_log)
+```
+
+I spotted some problems with the timestamp data. So before analysis, I need to convert it to *date time* format and split to date and time.
+
+```{r format}
+intensities$ActivityHour=as.POSIXct(intensities$ActivityHour, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+intensities$time <- format(intensities$ActivityHour, format = "%H:%M:%S")
+intensities$date <- format(intensities$ActivityHour, format = "%m/%d/%y")
+
+calories$ActivityHour=as.POSIXct(calories$ActivityHour, format="%m/%d/%Y %I:%M:%S %p", tz=Sys.timezone())
+calories$time <- format(calories$ActivityHour, format = "%H:%M:%S")
+calories$date <- format(calories$ActivityHour, format = "%m/%d/%y")
+
+activity$ActivityDate=as.POSIXct(activity$ActivityDate, format="%m/%d/%Y", tz=Sys.timezone())
+activity$date <- format(activity$ActivityDate, format = "%m/%d/%y")
+```
+
+**Analyze**
+```{r unique}
+n_distinct(activity$Id)
+n_distinct(calories$Id)
+n_distinct(intensities$Id)
+n_distinct(sleep_day$Id)
+n_distinct(weight_log$Id)
+```
+This tells us the number of participants in each data sets.There is 33 participants in the activity, calories and intensities data sets, 24 in the sleep and only 8 in the weight data set. 8 participants is not significant to make any recommendations and conclusions based on this data.
+
+Let’s have a look at summary statistics of the data sets:
+
+```{r}
+#activity
+activity %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes, Calories) %>%
+  summary()
+
+#explore num of active minutes per category
+activity %>% 
+  select(VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes) %>% 
+  summary()
+
+#calories
+calories %>% 
+  select(Calories) %>% 
+  summary()
+
+#sleep_day
+sleep_day %>% 
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>% 
+  summary()
+
+#weight_log
+weight_log %>% 
+  select(WeightKg, BMI) %>% 
+  summary()
+```
+
+Some interesting discoveries from this summary:
+
+
+1. Average sedentary time is 991 minutes or 16 hours. Definately needs to be reduced!
+2. The majority of the participants are lightly active.
+3. On the average, participants sleep 1 time for 7 hours.
+  +Average total steps per day are 7638 which a little bit less for having health benefits for according to the CDC
+  research. They found that taking 8,000 steps per day was associated with a 51% lower risk for all-cause mortality
+  (or death from all causes). Taking 12,000 steps per day was associated with a 65% lower risk compared with taking
+  4,000 steps.
+
+
+*Before visualizing the data, I need to merge two datasets*
+```{r}
+merged_data <- merge(sleep_day, activity, by=intersect("Id", "data"))
+head(merged_data)
+merged_data <- merge(sleep_day, activity, by=intersect("Id", "data"))
+head(merged_data)
+```
+
+**Share**
+
+
+## Plots
+### Total Steps vs. Calories
+
+```{r}
+ggplot(data=activity, aes(x=TotalSteps, y=Calories)) + 
+  geom_point() + geom_smooth()+labs(title="Total Steps vs. Calories",
+                      caption = "Data Source: Fitbase Data")
+```
+
+*A positive correlation here between Total Steps and Calories, which is obviouse - the more active we are, the more calories we burn.*
+
+### Total Minutes Asleep vs. Total Time in Bed
+```{r}
+ggplot(data=sleep_day, aes(x=TotalMinutesAsleep, y=TotalTimeInBed)) + 
+  geom_point()+ labs(title="Total Minutes Asleep vs. Total Time in Bed",
+                     caption = "Data Source: Fitbase Data")
+```
+
+*It shows linear. We could set up notifications to remind Bellabeat users to go to sleep if they want to improve their sleep.*
+
+
+### Average Total Intensity vs. Time
+```{r}
+int_new <- intensities %>%
+  group_by(time) %>%
+  drop_na() %>%
+  summarise(mean_total_int = mean(TotalIntensity))
+
+ggplot(data=int_new, aes(x=time, y=mean_total_int)) + geom_histogram(stat = "identity", fill='pink') +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title="Average Total Intensity vs. Time",
+         caption = "Data Source: Fitbase Data")
+```
+
+*After visualizing Total Intensity hourly, I found out that people are more active between 5 am and 10pm.Most activity happens between 5 pm and 7 pm. I assume that people go to gym or have a walk after finishing work. **We can use this time in the Bellabeat app to remind and motivate users to go for a run or walk**.*
+
+
+## Summarizing recommendations for the business
+
+
+1. Average total steps per day are 7638 which a little bit less for having health benefits for according to the CDC research. They found that taking 8,000 steps per day was associated with a 51% lower risk for all-cause mortality (or death from all causes). Taking 12,000 steps per day was associated with a 65% lower risk compared with taking 4,000 steps. Bellabeat can **encourage people to take at least 8,000 explaining the benefits for their health**.
+2. If users want to improve their sleep, Bellabeat should consider using **app notifications** to go to bed.
+3. Most activities happen between 5 pm and 7 pm.Bellabeat can use this time to **remind and motivate users to go for a run or walk**.
+4. As an idea: if users want to improve their sleep, the Bellabeat app can recommend reducing sedentary time.
+
+
